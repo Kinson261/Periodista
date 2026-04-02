@@ -1,9 +1,11 @@
 # from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator, RelevantContentFilter
 import random
+import time
 import crawl4ai
 import asyncio
 import dotenv
-from typing import Any, List
+import pydantic
+from typing import Any, Dict, List
 
 from crawl4ai import (
     AsyncWebCrawler,
@@ -20,79 +22,18 @@ from crawl4ai import (
 
 from parserURL import parseURLFileUserInput
 from proxy import proxiesRotation
+import agent
 
-"""
-async def quick_parallel_example() -> None:
-    urls = SOURCES
-
-    relevance_filter = crawl4ai.ContentRelevanceFilter(
-        query="Web crawling and data extraction with Python",
-        threshold=0.7,  # Minimum similarity score (0.0 to 1.0)
-    )
-
-    md_generator = crawl4ai.DefaultMarkdownGenerator(
-        content_filter=crawl4ai.PruningContentFilter(
-            threshold=0.4,
-            threshold_type="fixed",
-        ),
-    )
-
-    crawl_strategy = crawl4ai.BFSDeepCrawlStrategy(
-        max_depth=2,
-        filter_chain= crawl4ai.FilterChain([relevance_filter]),
-        include_external=False,
-        )
-
-    scrape_strategy = crawl4ai.LXMLWebScrapingStrategy()
-
-
-    run_conf = CrawlerRunConfig(
-        cache_mode=CacheMode.ENABLED,
-        stream=True,  # Enable streaming mode
-        only_text=True,
-        exclude_all_images=True,
-        exclude_external_links=True,
-        exclude_social_media_links=True,
-        proxy_rotation_strategy=RoundRobinProxyStrategy(proxies),
-        check_cache_freshness=True,
-        remove_overlay_elements=True,
-        process_iframes=True,
-        markdown_generator=md_generator,
-        # deep_crawl_strategy=crawl_strategy,
-        scraping_strategy= scrape_strategy,
-    )
-
-    browser_conf = BrowserConfig(
-        browser_type="chromium",
-        headless=False,
-        proxy_config=proxies[0],
-        verbose=True,
-    )
-
-    async with AsyncWebCrawler() as crawler:
-        # Stream results as they complete
-        async for result in await crawler.arun_many(urls, config=run_conf):
-            if result.success:
-                print(f"[OK] {result.url}, length: {len(result.markdown.raw_markdown)}")
-            else:
-                print(f"[ERROR] {result.url} => {result.error_message}")
-
-        # Or get all results at once (default behavior)
-        run_conf = run_conf.clone(stream=False)
-        results = await crawler.arun_many(urls, config=run_conf)
-        for res in results:
-            if res.success:
-                print(f"[OK] {res.url}, length: {len(res.markdown.raw_markdown)}")
-                # print(f"content = {res.markdown.fit_markdown}")
-                print(f"content = {res.markdown.raw_markdown}")
-            else:
-                print(f"[ERROR] {res.url} => {res.error_message}")
-"""
+env = dotenv.dotenv_values()
 
 class ScraperCrawl4Ai:
-    def __init__(self, n_proxy:int = 1) -> None:
+    def __init__(self, n_proxy:int = 1, AIAgent:agent.Agent = None, streaming: bool = False) -> None:
         self.n_proxy: int = n_proxy
         self.proxies: List[ProxyConfig] = []
+        # self.retrieved_content: List[str]  = []     #TODO: transform this into a dictionnary
+        self.retrieved_content: Dict[str,str] = dict()     #TODO: transform this into a dictionnary
+        self.agent= AIAgent
+        self.streaming: bool = streaming
 
     def __repr__(self) -> str:
         return f"ScraperCrawl4Ai()"
@@ -155,35 +96,45 @@ class ScraperCrawl4Ai:
         )
 
         async with AsyncWebCrawler() as crawler:
-            # Stream results as they complete
-            async for result in await crawler.arun_many(urls, config=run_conf):
-                if result.success:
-                    print(f"[OK] {result.url}, length: {len(result.markdown.raw_markdown)}")
-                else:
-                    print(f"[ERROR] {result.url} => {result.error_message}")
+            if self.streaming:
+                # Stream results as they complete
+                async for result in await crawler.arun_many(urls, config=run_conf):
+                    if result.success:
+                        print(f"[OK] {result.url}, length: {len(result.markdown.raw_markdown)}")
+                        self.retrieved_content.update({result.url : result.markdown.raw_markdown})
+                    else:
+                        print(f"[ERROR] {result.url} => {result.error_message}")
+            else:
+                # Or get all results at once (default behavior)
+                run_conf = run_conf.clone(stream=False)
+                results = await crawler.arun_many(urls, config=run_conf)
+                for result in results:
+                    if result.success:
+                        print(f"\n\n\n\n\n\n\n[OK] {result.url}, length: {len(result.markdown.raw_markdown)}")
+                        # print(f"content = {res.markdown.fit_markdown}")
+                        # print(f"content = {res.markdown.raw_markdown}")
+                        self.retrieved_content.update({result.url : result.markdown.raw_markdown})
+                    else:
+                        print(f"[ERROR] {result.url} => {result.error_message}")
 
-            # Or get all results at once (default behavior)
-            run_conf = run_conf.clone(stream=False)
-            results = await crawler.arun_many(urls, config=run_conf)
-            for res in results:
-                if res.success:
-                    print(f"[OK] {res.url}, length: {len(res.markdown.raw_markdown)}")
-                    # print(f"content = {res.markdown.fit_markdown}")
-                    print(f"content = {res.markdown.raw_markdown}")
-                else:
-                    print(f"[ERROR] {res.url} => {res.error_message}")
+    async def crawler_async_function(self, sources:List[str]):
+        res = await self.parallel_crawling(sources)
 
-
-async def crawler_async_function(scraper: ScraperCrawl4Ai, sources:List[str]):
-    res = await scraper.parallel_crawling(sources)
+    async def rag(self):
+        for key in self.retrieved_content:
+            print(f"\n\n\nURL= {key}")
+            res = await self.agent.chat(prompt=f"{self.retrieved_content[key]}. {env["PROMPT"]}")
 
 
 if __name__ == "__main__":
-    config = dotenv.dotenv_values()
-    source_file = config["SOURCE_FILE"]
+    STREAMING = pydantic.TypeAdapter(bool).validate_strings(env["STREAMING"])
+    source_file = pydantic.TypeAdapter(str).validate_strings(env["SOURCE_FILE"])
+    print(f"source file = {source_file}")
+
     links: List[str] = parseURLFileUserInput(source_file)
-    print(f"Config:\n{config}")
-    scraper = ScraperCrawl4Ai()
-    scraper.proxies = [ProxyConfig.from_string(element) for element in scraper.getProxy(n_proxy=int(config["PROXY_NUMBER"]),
-                                                                                                  country_id=config["PROXY_COUNTRY"])]
-    asyncio.run(crawler_async_function(scraper, links))
+    print(f"Config:\n{env}")
+    m_agent = agent.Agent(local=True, model=env["OLLAMA_MODEL"], role="user", streaming=STREAMING)
+    scraper = ScraperCrawl4Ai(AIAgent=m_agent, streaming=STREAMING)
+    scraper.proxies = [ProxyConfig.from_string(element) for element in scraper.getProxy(n_proxy=int(env["PROXY_NUMBER"]), country_id=env["PROXY_COUNTRY"])]
+    asyncio.run(scraper.parallel_crawling(sources=links))
+    asyncio.run(scraper.rag())
