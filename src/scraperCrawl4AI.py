@@ -27,10 +27,9 @@ import agent
 env = dotenv.dotenv_values()
 
 class ScraperCrawl4Ai:
-    def __init__(self, n_proxy:int = 1, AIAgent:agent.Agent = None, streaming: bool = False) -> None:
+    def __init__(self, n_proxy:int = 1, AIAgent:agent.Agent = agent.Agent(local=True, model="Llama3.1:8b", role="user", streaming=False), streaming: bool = False) -> None:
         self.n_proxy: int = n_proxy
         self.proxies: List[ProxyConfig] = []
-        # self.retrieved_content: List[str]  = []     #TODO: transform this into a dictionnary
         self.retrieved_content: Dict[str,str] = dict()     #TODO: transform this into a dictionnary
         self.agent= AIAgent
         self.streaming: bool = streaming
@@ -112,7 +111,7 @@ class ScraperCrawl4Ai:
                     if result.success:
                         print(f"\n\n\n\n\n\n\n[OK] {result.url}, length: {len(result.markdown.raw_markdown)}")
                         # print(f"content = {res.markdown.fit_markdown}")
-                        # print(f"content = {res.markdown.raw_markdown}")
+                        print(f"content = {result.markdown.raw_markdown}")
                         self.retrieved_content.update({result.url : result.markdown.raw_markdown})
                     else:
                         print(f"[ERROR] {result.url} => {result.error_message}")
