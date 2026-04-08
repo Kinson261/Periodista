@@ -1,10 +1,12 @@
-from typing import List
-from fp.fp import FreeProxy
 import time
+from typing import List
+
+from fp.fp import FreeProxy
 
 DEBUG = False
 
-def proxiesRotation(number:int, countries: List[str] = ["US"]):
+
+def proxiesRotation(number: int, countries: List[str] = ["US"]):
     """
     Scrapes proxies from <https://www.sslproxies.org/>,
     <https://www.us-proxy.org/>, <https://free-proxy-list.net/uk-proxy.html>,
@@ -28,16 +30,17 @@ def proxiesRotation(number:int, countries: List[str] = ["US"]):
         if DEBUG:
             print(f"number of proxies = {number}, countries = {countries}")
             cnt += 1
-            if (cnt % 10 == 0):
+            if cnt % 10 == 0:
                 print(f"cnt = {cnt}")
 
             cycle_time = time.time() - start_time
             print(f"cycle_time = {cycle_time} s, proxy = {proxies}")
 
-        if (len(proxies) == number):
+        if len(proxies) == number:
             break
 
     return proxies
+
 
 if __name__ == "__main__":
     print(proxiesRotation(5))

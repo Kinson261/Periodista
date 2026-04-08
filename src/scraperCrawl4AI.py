@@ -1,51 +1,46 @@
 # from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator, RelevantContentFilter
-import random
-import time
-import crawl4ai
 import asyncio
+import random
+from typing import Dict, List
+
+import crawl4ai
 import dotenv
 import pydantic
-from typing import Any, Dict, List
-
 from crawl4ai import (
     AsyncWebCrawler,
-    BrowserAdapter,
     BrowserConfig,
     CacheMode,
     CrawlerRunConfig,
-    CrawlStrategy,
-    DeepCrawlStrategy,
-    ExtractionStrategy,
     ProxyConfig,
     RoundRobinProxyStrategy,
 )
 
+import agent
 from parserURL import parseURLFileUserInput
 from proxy import proxiesRotation
-import agent
 
 env = dotenv.dotenv_values()
 
+
 class ScraperCrawl4Ai:
-    def __init__(self, n_proxy:int = 1, AIAgent:agent.Agent = agent.Agent(local=True, model="Llama3.1:8b", role="user", streaming=False), streaming: bool = False) -> None:
+    def __init__(self, n_proxy: int = 1, AIAgent: agent.Agent = agent.Agent(local=True, model="Llama3.1:8b", role="user", streaming=False), streaming: bool = False) -> None:
         self.n_proxy: int = n_proxy
         self.proxies: List[ProxyConfig] = []
-        self.retrieved_content: Dict[str,str] = dict()     #TODO: transform this into a dictionnary
-        self.agent= AIAgent
+        self.retrieved_content: Dict[str, str] = dict()  # TODO: transform this into a dictionnary
+        self.agent = AIAgent
         self.streaming: bool = streaming
 
     def __repr__(self) -> str:
-        return f"ScraperCrawl4Ai()"
+        return "ScraperCrawl4Ai()"
 
     def __str__(self) -> str:
         return f"\nScraperCrawl4Ai() \
                 \nn_proxy: {self.n_proxy} \
                 \nproxies: {self.proxies}"
 
-    def getProxy(self, n_proxy:int ,country_id:List[str]):
+    def getProxy(self, n_proxy: int, country_id: List[str]):
         # self.proxies = proxiesRotation(number=self.n_proxy)
         return proxiesRotation(number=n_proxy, countries=country_id)
-
 
     async def parallel_crawling(self, sources) -> None:
         urls = sources
@@ -64,12 +59,11 @@ class ScraperCrawl4Ai:
 
         crawl_strategy = crawl4ai.BFSDeepCrawlStrategy(
             max_depth=2,
-            filter_chain= crawl4ai.FilterChain([relevance_filter]),
+            filter_chain=crawl4ai.FilterChain([relevance_filter]),
             include_external=False,
-            )
+        )
 
         scrape_strategy = crawl4ai.LXMLWebScrapingStrategy()
-
 
         run_conf = CrawlerRunConfig(
             cache_mode=CacheMode.ENABLED,
@@ -84,7 +78,7 @@ class ScraperCrawl4Ai:
             process_iframes=True,
             markdown_generator=md_generator,
             # deep_crawl_strategy=crawl_strategy,
-            scraping_strategy= scrape_strategy,
+            scraping_strategy=scrape_strategy,
         )
 
         browser_conf = BrowserConfig(
@@ -100,7 +94,7 @@ class ScraperCrawl4Ai:
                 async for result in await crawler.arun_many(urls, config=run_conf):
                     if result.success:
                         print(f"[OK] {result.url}, length: {len(result.markdown.raw_markdown)}")
-                        self.retrieved_content.update({result.url : result.markdown.raw_markdown})
+                        self.retrieved_content.update({result.url: result.markdown.raw_markdown})
                     else:
                         print(f"[ERROR] {result.url} => {result.error_message}")
             else:
@@ -112,17 +106,17 @@ class ScraperCrawl4Ai:
                         print(f"\n\n\n\n\n\n\n[OK] {result.url}, length: {len(result.markdown.raw_markdown)}")
                         # print(f"content = {res.markdown.fit_markdown}")
                         print(f"content = {result.markdown.raw_markdown}")
-                        self.retrieved_content.update({result.url : result.markdown.raw_markdown})
+                        self.retrieved_content.update({result.url: result.markdown.raw_markdown})
                     else:
                         print(f"[ERROR] {result.url} => {result.error_message}")
 
-    async def crawler_async_function(self, sources:List[str]):
+    async def crawler_async_function(self, sources: List[str]):
         res = await self.parallel_crawling(sources)
 
     async def rag(self):
         for key in self.retrieved_content:
             print(f"\n\n\nURL= {key}")
-            res = await self.agent.chat(prompt=f"{self.retrieved_content[key]}. {env["PROMPT"]}")
+            res = await self.agent.chat(prompt=f"{self.retrieved_content[key]}. {env['PROMPT']}")
 
 
 if __name__ == "__main__":
